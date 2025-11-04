@@ -45,11 +45,18 @@
             android:paddingTop="8dp"
             android:paddingBottom="4dp" />
 
-        <io.github.rosemoe.sora.widget.CodeEditor
+        <EditText
             android:id="@+id/codeEditor"
             android:layout_width="match_parent"
             android:layout_height="300dp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="8dp"
+            android:gravity="top|start"
+            android:inputType="textMultiLine"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:background="#F5F5F5"
+            android:hint="Enter your OpenCV code here..." />
 
         <LinearLayout
             android:layout_width="match_parent"
