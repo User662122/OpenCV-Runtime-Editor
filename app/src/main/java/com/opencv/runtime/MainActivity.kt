@@ -9,16 +9,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import io.github.rosemoe.sora.widget.CodeEditor
-import org.opencv.android.OpenCVLoader
-import org.opencv.android.Utils
-import org.opencv.core.Mat
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
@@ -28,27 +25,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnExecute: Button
     private lateinit var ivSelectedImage: ImageView
     private lateinit var ivProcessedImage: ImageView
-    private lateinit var codeEditor: CodeEditor
+    private lateinit var codeEditor: EditText
     private lateinit var tvConsole: TextView
 
     private var selectedBitmap: Bitmap? = null
     private val PICK_IMAGE_REQUEST = 1
     private val PERMISSION_REQUEST_CODE = 100
 
-    private val scriptExecutor = KotlinScriptExecutor()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize OpenCV
-        if (!OpenCVLoader.initDebug()) {
-            log("OpenCV initialization failed!")
-            Toast.makeText(this, "OpenCV initialization failed", Toast.LENGTH_LONG).show()
-        } else {
-            log("OpenCV loaded successfully!")
-        }
-
+        log("Android Image Processor initialized!")
+        
         initViews()
         setupListeners()
         loadDefaultCode()
@@ -63,10 +52,6 @@ class MainActivity : AppCompatActivity() {
         ivProcessedImage = findViewById(R.id.ivProcessedImage)
         codeEditor = findViewById(R.id.codeEditor)
         tvConsole = findViewById(R.id.tvConsole)
-
-        // Configure code editor
-        codeEditor.typefaceText = android.graphics.Typeface.MONOSPACE
-        codeEditor.setTextSize(14f)
     }
 
     private fun setupListeners() {
@@ -126,25 +111,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadDefaultCode() {
         val sampleCode = """
-// Sample OpenCV Code - Grayscale Conversion
-import org.opencv.core.*
-import org.opencv.imgproc.Imgproc
-import android.graphics.Bitmap
+// Grayscale Conversion
+// Keywords: grayscale, COLOR_BGR2GRAY
 
 fun process(bitmap: Bitmap): Bitmap {
-    val src = Mat()
-    Utils.bitmapToMat(bitmap, src)
-    
-    val gray = Mat()
-    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-    
-    val result = Bitmap.createBitmap(
-        gray.cols(), gray.rows(), Bitmap.Config.ARGB_8888
-    )
-    Utils.matToBitmap(gray, result)
-    
-    return result
+    // Convert image to grayscale
+    return grayscale(bitmap)
 }
+
+// Available operations:
+// - grayscale
+// - blur
+// - brightness
+// - contrast
+// - invert
         """.trimIndent()
         
         codeEditor.setText(sampleCode)
@@ -167,7 +147,7 @@ fun process(bitmap: Bitmap): Bitmap {
         log("Executing code...")
         
         try {
-            val result = scriptExecutor.execute(code, selectedBitmap!!)
+            val result = SimpleImageProcessor.processImage(selectedBitmap!!, code)
             ivProcessedImage.setImageBitmap(result)
             log("✓ Code executed successfully!")
         } catch (e: Exception) {
