@@ -45,5 +45,12 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     
-    // Note: OpenCV needs to be added manually - see README.md for instructions
+    // OpenCV dependency
+    implementation("org.opencv:opencv:4.8.0")
+    
+    // Kotlin scripting dependencies
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-script-runtime:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-script-util:1.9.20")
+    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.20")
 }
