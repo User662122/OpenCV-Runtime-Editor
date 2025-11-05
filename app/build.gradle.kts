@@ -47,9 +47,4 @@ dependencies {
     
     // OpenCV - Official Maven Central package
     implementation("org.opencv:opencv:4.9.0")
-    
-    // Kotlin scripting dependencies
-    implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.20")
-    implementation("org.jetbrains.kotlin:kotlin-script-runtime:1.9.20")
-    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.20")
 }

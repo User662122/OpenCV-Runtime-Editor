@@ -2,33 +2,11 @@ package com.opencv.runtime
 
 import android.graphics.Bitmap
 import org.opencv.android.Utils
-import javax.script.ScriptEngineManager
-import kotlin.script.experimental.api.*
-import kotlin.script.experimental.jvm.dependenciesFromCurrentContext
-import kotlin.script.experimental.jvm.jvm
-import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
-import kotlin.script.experimental.jvmhost.createJvmCompilationConfigurationFromTemplate
-import kotlinx.coroutines.runBlocking
 
 class KotlinScriptExecutor {
 
     fun execute(code: String, inputBitmap: Bitmap): Bitmap {
         return try {
-            // Create a wrapper script that includes necessary imports and context
-            val wrappedCode = """
-import org.opencv.core.*
-import org.opencv.imgproc.Imgproc
-import org.opencv.android.Utils
-import android.graphics.Bitmap
-
-val inputBitmap: Bitmap = ${bitmapToDataUri(inputBitmap)}
-
-$code
-
-// Call the process function
-process(inputBitmap)
-            """.trimIndent()
-
             // Use reflection-based execution for safety
             executeSafely(code, inputBitmap)
         } catch (e: Exception) {
@@ -198,10 +176,5 @@ process(inputBitmap)
         Utils.matToBitmap(src, result)
         
         return result
-    }
-
-    private fun bitmapToDataUri(bitmap: Bitmap): String {
-        // Placeholder - in real implementation, we pass bitmap directly
-        return "bitmap_placeholder"
     }
 }
