@@ -1,42 +1,144 @@
-name: Build Android APK
+name: Auto Chess Backend
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  build:
+  run-chess-backend:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
-    
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    
-    - name: Build debug APK
-      run: ./gradlew assembleDebug --stacktrace
-    
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 30
-    
-    - name: Build info
-      run: |
-        echo "✅ APK built successfully!"
-        echo "📱 APK location: app/build/outputs/apk/debug/app-debug.apk"
-        ls -lh app/build/outputs/apk/debug/
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y stockfish
+
+      - name: Install Python packages
+        run: |
+          pip install flask python-chess stockfish pyngrok
+
+      - name: Run Chess Backend
+        run: |
+          python3 - <<'EOF'
+          from flask import Flask, request
+          import chess
+          from stockfish import Stockfish
+          import os
+          from pyngrok import ngrok
+          import time
+          import threading
+
+          app = Flask(__name__)
+
+          class ChessBrain:
+              def __init__(self):
+                  self.board = chess.Board()
+                  self.app_color = None
+                  self.game_active = False
+                  self.ai = Stockfish(path=self._find_stockfish(), depth=20, parameters={
+                      "Threads": 4,
+                      "Hash": 2048,
+                      "Skill Level": 20,
+                      "UCI_LimitStrength": False
+                  })
+
+              def _find_stockfish(self):  
+                  import shutil  
+                  possible_paths = ["/usr/games/stockfish", "/usr/bin/stockfish", "stockfish"]  
+                  for path in possible_paths:  
+                      if os.path.isfile(path) or os.access(path, os.X_OK):  
+                          return path  
+                  return shutil.which("stockfish")  
+
+              def start_game(self, color):  
+                  color = color.strip().lower()  
+                  if color not in ['white', 'black']:  
+                      return "Invalid"  
+                  self.app_color = chess.WHITE if color == 'white' else chess.BLACK  
+                  self.board.reset()  
+                  self.game_active = True  
+
+                  if self.app_color == chess.WHITE:  
+                      move = self._get_best_move()  
+                      return move if move else "Game Over"  
+                  else:  
+                      return ""  
+
+              def process_move(self, move_input):  
+                  if not self.game_active:  
+                      return "Game Over"  
+
+                  move_input = move_input.strip().lower()  
+                  try:  
+                      move = chess.Move.from_uci(move_input)  
+                  except:  
+                      return "Invalid"  
+
+                  if move not in self.board.legal_moves:  
+                      return "Invalid"  
+
+                  self.board.push(move)  
+
+                  if self.board.is_game_over():  
+                      self.game_active = False  
+                      threading.Thread(target=self._delayed_game_over).start()  
+                      return ""  
+
+                  next_move = self._get_best_move()  
+                  if not next_move:  
+                      self.game_active = False  
+                      threading.Thread(target=self._delayed_game_over).start()  
+                      return "Game Over"  
+
+                  if self.board.is_game_over():  
+                      self.game_active = False  
+                      threading.Thread(target=self._delayed_game_over).start()  
+
+                  return next_move  
+
+              def _delayed_game_over(self):  
+                  time.sleep(8)  
+                  print("⚠️ Game Over (delayed)")  
+
+              def _get_best_move(self):  
+                  self.ai.set_fen_position(self.board.fen())  
+                  best_move = self.ai.get_best_move_time(2000)  
+                  if best_move:  
+                      move = chess.Move.from_uci(best_move)  
+                      if move in self.board.legal_moves:  
+                          self.board.push(move)  
+                          return best_move  
+                  return None
+
+          brain = ChessBrain()
+
+          @app.route('/start', methods=['POST'])
+          def start():
+              color = request.get_data(as_text=True).strip()
+              result = brain.start_game(color)
+              return result, 200, {'Content-Type': 'text/plain'}
+
+          @app.route('/move', methods=['POST'])
+          def move():
+              move_input = request.get_data(as_text=True).strip()
+              result = brain.process_move(move_input)
+              return result, 200, {'Content-Type': 'text/plain'}
+
+          # Hardcoded ngrok token
+          ngrok.set_auth_token("31TWswIKgSWHAfejOFT6s8mcW69_4UCxySRXzy6Si8mDHn9zn")
+
+          port = 5000
+          public_url = ngrok.connect(port)
+          print("✅ BACKEND LIVE!")
+          print("🌍 Public URL:", public_url)
+          print("🕹  POST /start   (body: 'white' or 'black')")
+          print("♟  POST /move    (body: 'e2e4', etc.)")
+          print("=" * 60)
+
+          app.run(host="0.0.0.0", port=port)
+          EOF
