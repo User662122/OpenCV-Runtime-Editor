@@ -1,7 +1,3 @@
-pip install python-chess
-pip install stockfish
-pip install pyngrok
-apt-get install -y stockfish
 from flask import Flask, request
 import chess
 from stockfish import Stockfish
