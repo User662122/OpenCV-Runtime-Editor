@@ -22,6 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install flask
           pip install python-chess
           pip install stockfish
           pip install pyngrok
