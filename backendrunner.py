@@ -15,262 +15,284 @@ class ChessBrain:
         self.game_active = False
         self.last_position_snapshot = None
         self.first_move_received = False
-
-        # NEW FIELDS FOR REVERSE MOVE PROTECTION
         self.last_ai_move = None
-        self.last_ai_time = 0
+        self.last_ai_move_time = 0
 
-        self.ai = Stockfish(path=self._find_stockfish(), depth=20, parameters={
-            "Threads": 4,
-            "Hash": 2048,
-            "Skill Level": 20,
-            "UCI_LimitStrength": False
-        })
+        self.ai = Stockfish(path=self._find_stockfish(), depth=20, parameters={  
+            "Threads": 4,  
+            "Hash": 2048,  
+            "Skill Level": 20,  
+            "UCI_LimitStrength": False  
+        })  
 
-    def _find_stockfish(self):
-        import shutil
-        possible_paths = ["/usr/games/stockfish", "/usr/bin/stockfish", "stockfish"]
-        for path in possible_paths:
-            if os.path.isfile(path) or os.access(path, os.X_OK):
-                return path
-        return shutil.which("stockfish")
+    def _find_stockfish(self):  
+        import shutil  
+        possible_paths = ["/usr/games/stockfish", "/usr/bin/stockfish", "stockfish"]  
+        for path in possible_paths:  
+            if os.path.isfile(path) or os.access(path, os.X_OK):  
+                return path  
+        return shutil.which("stockfish")  
 
-    def start_game(self, color):
-        color = color.strip().lower()
-        if color not in ['white', 'black']:
-            return "Invalid"
+    def start_game(self, color):  
+        color = color.strip().lower()  
+        if color not in ['white', 'black']:  
+            return "Invalid"  
 
-        self.app_color = chess.WHITE if color == 'white' else chess.BLACK
-        self.board.reset()
-        self.game_active = True
-        self.first_move_received = False
-        self.last_position_snapshot = self._get_piece_snapshot()
+        self.app_color = chess.WHITE if color == 'white' else chess.BLACK  
+        self.board.reset()  
+        self.game_active = True  
+        self.first_move_received = False  
+        self.last_position_snapshot = self._get_piece_snapshot()  
+        self.last_ai_move = None
+        self.last_ai_move_time = 0
 
-        if self.app_color == chess.WHITE:
-            move = self._get_best_move()
-            return move if move else "Game Over"
-        else:
-            return ""
+        if self.app_color == chess.WHITE:  
+            move = self._get_best_move()  
+            return move if move else "Game Over"  
+        else:  
+            return ""  
 
-    def _reverse(self, mv):
-        return mv[2:] + mv[:2]
+    def process_move(self, incoming):  
+        print(f"📥 Incoming: {incoming}")  
 
-    def process_move(self, incoming):
-        print(f"📥 Incoming: {incoming}")
+        if not self.game_active:  
+            return "Game Over"  
 
-        if not self.game_active:
-            return "Game Over"
-
-        # ==== CHECK FOR REVERSE OF AI MOVE WITHIN 5 SECONDS ====
-        if self.last_ai_move and time.time() - self.last_ai_time < 5:
-            if self._is_uci_move(incoming):
-                incoming_norm = incoming.strip().lower()
-                if incoming_norm == self._reverse(self.last_ai_move):
-                    print("⛔ Ignored reverse move (5s protection)")
+        # ===== ALWAYS CHECK IF IT'S A UCI MOVE FIRST =====  
+        if self._is_uci_move(incoming):  
+            try:  
+                move = chess.Move.from_uci(incoming.strip().lower())  
+                
+                # Check if this is the reverse of the last AI move (within 5 seconds)
+                current_time = time.time()
+                if (self.last_ai_move and 
+                    current_time - self.last_ai_move_time <= 5 and
+                    self._is_reverse_move(move, self.last_ai_move)):
+                    print("🔄 Reverse AI move detected - ignoring")
                     return ""
+                
+                if move in self.board.legal_moves:  
+                    self.board.push(move)  
+                    self.last_position_snapshot = self._get_piece_snapshot()  
+                    print(f"✅ Move detected: {move.uci()}")  
 
-        # ===== ALWAYS CHECK IF IT'S A UCI MOVE FIRST =====
-        if self._is_uci_move(incoming):
-            try:
-                move = chess.Move.from_uci(incoming.strip().lower())
+                    if self.board.is_checkmate():  
+                        self.game_active = False  
+                        threading.Thread(target=self._delayed_game_over).start()  
+                        return ""  
 
-                # AGAIN CHECK REVERSE MOVE FOR SNAPSHOT DEDUCED MOVE CASE
-                if self.last_ai_move and time.time() - self.last_ai_time < 5:
-                    if move.uci() == self._reverse(self.last_ai_move):
-                        print("⛔ Ignored reverse move (UCI detect)")
-                        return ""
+                    ai_move = self._get_best_move()  
+                    print(f"🎯 AI response: {ai_move}")  
+                    return ai_move if ai_move else ""  
+                else:  
+                    return "Invalid"  
+            except:  
+                return "Invalid"  
 
-                if move in self.board.legal_moves:
-                    self.board.push(move)
-                    self.last_position_snapshot = self._get_piece_snapshot()
-                    print(f"✅ Move detected: {move.uci()}")
+        # ===== POSITION FORMAT PROCESSING =====  
+        positions = self._parse_positions(incoming)  
+        if positions is None:  
+            return ""  
 
-                    if self.board.is_checkmate():
-                        self.game_active = False
-                        threading.Thread(target=self._delayed_game_over).start()
-                        return ""
+        current_board_snapshot = self._get_piece_snapshot()  
 
-                    ai_move = self._get_best_move()
-                    print(f"🎯 AI response: {ai_move}")
-                    return ai_move if ai_move else ""
-                else:
-                    return "Invalid"
-            except:
-                return "Invalid"
+        # Compare if same as current board  
+        if positions == current_board_snapshot:  
+            return ""  
 
-        # ===== POSITION FORMAT PROCESSING =====
-        positions = self._parse_positions(incoming)
-        if positions is None:
+        # Compare drastic change against CURRENT BOARD  
+        if self._is_drastic_change(positions, current_board_snapshot):  
+            return ""  
+
+        # Convert position snapshot into a best guess move  
+        move = self._deduce_move_from_snapshot(positions, current_board_snapshot)  
+        if not move:  
+            return "" 
+
+        # Check if this is the reverse of the last AI move (within 5 seconds)
+        current_time = time.time()
+        if (self.last_ai_move and 
+            current_time - self.last_ai_move_time <= 5 and
+            self._is_reverse_move_uci(move, self.last_ai_move)):
+            print("🔄 Reverse AI move detected - ignoring")
             return ""
 
-        current_board_snapshot = self._get_piece_snapshot()
+        print(f"✅ Move detected: {move}")  
 
-        if positions == current_board_snapshot:
-            return ""
+        try:  
+            move_obj = chess.Move.from_uci(move)  
+            if move_obj in self.board.legal_moves:  
+                self.board.push(move_obj)  
+                self.last_position_snapshot = self._get_piece_snapshot()  
+            else:  
+                return ""  
+        except:  
+            return ""  
 
-        if self._is_drastic_change(positions, current_board_snapshot):
-            return ""
+        if self.board.is_checkmate():  
+            self.game_active = False  
+            threading.Thread(target=self._delayed_game_over).start()  
+            return ""  
 
-        move = self._deduce_move_from_snapshot(positions, current_board_snapshot)
-        if not move:
-            return ""
+        ai_move = self._get_best_move()  
+        print(f"🎯 AI response: {ai_move}")  
+        return ai_move if ai_move else ""  
 
-        # ==== CHECK REVERSE MOVE AGAIN ====
-        if self.last_ai_move and time.time() - self.last_ai_time < 5:
-            if move == self._reverse(self.last_ai_move):
-                print("⛔ Ignored reverse snapshot move")
-                return ""
-
-        print(f"✅ Move detected: {move}")
-
+    # ====================== NEW REVERSE MOVE DETECTION ======================
+    
+    def _is_reverse_move(self, move_obj, previous_move_uci):
+        """Check if a move object is the reverse of the previous AI move"""
         try:
-            move_obj = chess.Move.from_uci(move)
-            if move_obj in self.board.legal_moves:
-                self.board.push(move_obj)
-                self.last_position_snapshot = self._get_piece_snapshot()
-            else:
-                return ""
+            previous_move = chess.Move.from_uci(previous_move_uci)
+            return (move_obj.from_square == previous_move.to_square and 
+                   move_obj.to_square == previous_move.from_square)
         except:
-            return ""
-
-        if self.board.is_checkmate():
-            self.game_active = False
-            threading.Thread(target=self._delayed_game_over).start()
-            return ""
-
-        ai_move = self._get_best_move()
-        print(f"🎯 AI response: {ai_move}")
-        return ai_move if ai_move else ""
-
-    def _delayed_game_over(self):
-        time.sleep(8)
-        print("⚠️ Game Over")
-
-    def _get_best_move(self):
-        self.ai.set_fen_position(self.board.fen())
-        best_move = self.ai.get_best_move_time(2000)
-
-        if best_move:
-            move = chess.Move.from_uci(best_move)
-            if move in self.board.legal_moves:
-
-                # STORE AI MOVE + TIME
-                self.last_ai_move = best_move
-                self.last_ai_time = time.time()
-
-                self.board.push(move)
-
-                if self.board.is_checkmate():
-                    self.game_active = False
-                    threading.Thread(target=self._delayed_game_over).start()
-
-                return best_move
-
-        return None
-
-    def _parse_positions(self, txt):
-        try:
-            txt = txt.strip().lower()
-
-            if ';' in txt:
-                parts = txt.split(';')
-            else:
-                parts = txt.split()
-
-            white_squares = []
-            black_squares = []
-
-            for part in parts:
-                part = part.strip()
-                if part.startswith("white:"):
-                    squares_str = part.split(":")[1]
-                    white_squares = [sq.strip() for sq in squares_str.split(",") if sq.strip()]
-                elif part.startswith("black:"):
-                    squares_str = part.split(":")[1]
-                    black_squares = [sq.strip() for sq in squares_str.split(",") if sq.strip()]
-
-            valid_squares = {f"{file}{rank}" for file in 'abcdefgh' for rank in '12345678'}
-            white_squares = [sq for sq in white_squares if sq in valid_squares]
-            black_squares = [sq for sq in black_squares if sq in valid_squares]
-
-            return {"white": sorted(white_squares), "black": sorted(black_squares)}
-
-        except:
-            return None
-
-    def _get_piece_snapshot(self):
-        w = []
-        b = []
-        for square, piece in self.board.piece_map().items():
-            square_name = chess.square_name(square)
-            if piece.color == chess.WHITE:
-                w.append(square_name)
-            else:
-                b.append(square_name)
-        return {"white": sorted(w), "black": sorted(b)}
-
-    def _is_drastic_change(self, new_pos, current_pos):
-        if current_pos is None:
             return False
+            
+    def _is_reverse_move_uci(self, move_uci, previous_move_uci):
+        """Check if a UCI move string is the reverse of the previous AI move"""
+        if len(move_uci) < 4 or len(previous_move_uci) < 4:
+            return False
+        return (move_uci[0:2] == previous_move_uci[2:4] and 
+                move_uci[2:4] == previous_move_uci[0:2])
 
-        current_white = set(current_pos["white"])
-        current_black = set(current_pos["black"])
-        new_white = set(new_pos["white"])
-        new_black = set(new_pos["black"])
+    # ====================== HELPERS ======================  
 
-        white_removed = current_white - new_white
-        white_added = new_white - current_white
-        black_removed = current_black - new_black
-        black_added = new_black - current_black
+    def _is_uci_move(self, text):  
+        text = text.strip().lower()  
+        if len(text) == 4 and text[0] in 'abcdefgh' and text[1] in '12345678' and text[2] in 'abcdefgh' and text[3] in '12345678':  
+            return True  
+        if len(text) == 5 and text[0] in 'abcdefgh' and text[1] in '12345678' and text[2] in 'abcdefgh' and text[3] in '12345678' and text[4] in 'qnrb':  
+            return True  
+        return False  
 
-        total_removed = len(white_removed) + len(black_removed)
-        total_added = len(white_added) + len(black_added)
+    def _delayed_game_over(self):  
+        time.sleep(8)  
+        print("⚠️ Game Over")  
 
-        if total_removed == 1 and total_added == 2:
-            return True
+    def _get_best_move(self):  
+        self.ai.set_fen_position(self.board.fen())  
+        best_move = self.ai.get_best_move_time(2000)  
+        if best_move:  
+            move = chess.Move.from_uci(best_move)  
+            if move in self.board.legal_moves:  
+                self.board.push(move)  
+                # Store the AI move and timestamp
+                self.last_ai_move = best_move
+                self.last_ai_move_time = time.time()
+                if self.board.is_checkmate():  
+                    self.game_active = False  
+                    threading.Thread(target=self._delayed_game_over).start()  
+                return best_move  
+        return None  
 
-        current_count = len(current_pos["white"]) + len(current_pos["black"])
-        new_count = len(new_pos["white"]) + len(new_pos["black"])
-        diff = abs(current_count - new_count)
+    def _parse_positions(self, txt):  
+        try:  
+            txt = txt.strip().lower()  
 
-        return diff > 2
+            if ';' in txt:  
+                parts = txt.split(';')  
+            else:  
+                parts = txt.split()  
 
-    def _deduce_move_from_snapshot(self, new_pos, current_pos):
-        current_white = set(current_pos["white"])
-        current_black = set(current_pos["black"])
-        new_white = set(new_pos["white"])
-        new_black = set(new_pos["black"])
+            white_squares = []  
+            black_squares = []  
 
-        white_removed = current_white - new_white
-        white_added = new_white - current_white
-        black_removed = current_black - new_black
-        black_added = new_black - current_black
+            for part in parts:  
+                part = part.strip()  
+                if part.startswith("white:"):  
+                    squares_str = part.split(":")[1]  
+                    white_squares = [sq.strip() for sq in squares_str.split(",") if sq.strip()]  
+                elif part.startswith("black:"):  
+                    squares_str = part.split(":")[1]  
+                    black_squares = [sq.strip() for sq in squares_str.split(",") if sq.strip()]  
 
-        if white_removed == {"e1", "h1"} and white_added == {"g1", "f1"}:
-            return "e1g1"
-        if white_removed == {"e1", "a1"} and white_added == {"c1", "d1"}:
-            return "e1c1"
-        if black_removed == {"e8", "h8"} and black_added == {"g8", "f8"}:
-            return "e8g8"
-        if black_removed == {"e8", "a8"} and black_added == {"c8", "d8"}:
-            return "e8c8"
+            valid_squares = {f"{file}{rank}" for file in 'abcdefgh' for rank in '12345678'}  
+            white_squares = [sq for sq in white_squares if sq in valid_squares]  
+            black_squares = [sq for sq in black_squares if sq in valid_squares]  
 
-        if len(white_removed) == 1 and len(white_added) == 1 and not black_removed and not black_added:
-            return list(white_removed)[0] + list(white_added)[0]
+            return {"white": sorted(white_squares), "black": sorted(black_squares)}  
 
-        if len(black_removed) == 1 and len(black_added) == 1 and not white_removed and not white_added:
-            return list(black_removed)[0] + list(black_added)[0]
+        except:  
+            return None  
 
-        if len(white_removed) == 1 and len(white_added) == 1 and len(black_removed) == 1 and not black_added:
-            if list(white_added)[0] in black_removed:
-                return list(white_removed)[0] + list(white_added)[0]
+    def _get_piece_snapshot(self):  
+        w = []  
+        b = []  
+        for square, piece in self.board.piece_map().items():  
+            square_name = chess.square_name(square)  
+            if piece.color == chess.WHITE:  
+                w.append(square_name)  
+            else:  
+                b.append(square_name)  
+        return {"white": sorted(w), "black": sorted(b)}  
 
-        if len(black_removed) == 1 and len(black_added) == 1 and len(white_removed) == 1 and not white_added:
-            if list(black_added)[0] in white_removed:
-                return list(black_removed)[0] + list(black_added)[0]
+    def _is_drastic_change(self, new_pos, current_pos):  
+        if current_pos is None:  
+            return False  
+
+        current_white = set(current_pos["white"])  
+        current_black = set(current_pos["black"])  
+        new_white = set(new_pos["white"])  
+        new_black = set(new_pos["black"])  
+
+        white_removed = current_white - new_white  
+        white_added = new_white - current_white  
+        black_removed = current_black - new_black  
+        black_added = new_black - current_black  
+
+        total_removed = len(white_removed) + len(black_removed)  
+        total_added = len(white_added) + len(black_added)  
+
+        if total_removed == 1 and total_added == 2:  
+            return True  
+
+        current_count = len(current_pos["white"]) + len(current_pos["black"])  
+        new_count = len(new_pos["white"]) + len(new_pos["black"])  
+        diff = abs(current_count - new_count)  
+
+        return diff > 2  
+
+    # ====================== UPDATED FUNCTION WITH CASTLING ======================  
+
+    def _deduce_move_from_snapshot(self, new_pos, current_pos):  
+        current_white = set(current_pos["white"])  
+        current_black = set(current_pos["black"])  
+        new_white = set(new_pos["white"])  
+        new_black = set(new_pos["black"])  
+
+        white_removed = current_white - new_white  
+        white_added = new_white - current_white  
+        black_removed = current_black - new_black  
+        black_added = new_black - current_black  
+
+        # ---- CASTLING DETECTION ----  
+        if white_removed == {"e1", "h1"} and white_added == {"g1", "f1"}:  
+            return "e1g1"  
+        if white_removed == {"e1", "a1"} and white_added == {"c1", "d1"}:  
+            return "e1c1"  
+        if black_removed == {"e8", "h8"} and black_added == {"g8", "f8"}:  
+            return "e8g8"  
+        if black_removed == {"e8", "a8"} and black_added == {"c8", "d8"}:  
+            return "e8c8"  
+
+        # ---- NORMAL MOVE ----  
+        if len(white_removed) == 1 and len(white_added) == 1 and not black_removed and not black_added:  
+            return list(white_removed)[0] + list(white_added)[0]  
+
+        if len(black_removed) == 1 and len(black_added) == 1 and not white_removed and not white_added:  
+            return list(black_removed)[0] + list(black_added)[0]  
+
+        # ---- CAPTURE ----  
+        if len(white_removed) == 1 and len(white_added) == 1 and len(black_removed) == 1 and not black_added:  
+            if list(white_added)[0] in black_removed:  
+                return list(white_removed)[0] + list(white_added)[0]  
+
+        if len(black_removed) == 1 and len(black_added) == 1 and len(white_removed) == 1 and not white_added:  
+            if list(black_added)[0] in white_removed:  
+                return list(black_removed)[0] + list(black_added)[0]  
 
         return None
-
 
 brain = ChessBrain()
 
