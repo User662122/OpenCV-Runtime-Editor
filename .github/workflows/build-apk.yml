@@ -9,7 +9,7 @@ on:
 jobs:
   run-script:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,12 +22,29 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install flask
-          pip install python-chess
-          pip install stockfish
-          pip install pyngrok
+          pip install flask python-chess stockfish pyngrok
           sudo apt-get update
           sudo apt-get install -y stockfish
 
-      - name: Run backend runner
-        run: python backendrunner.py
+      - name: Run and capture output
+        id: run_script
+        continue-on-error: true
+        run: |
+          # Create timestamp for unique filename
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          
+          # Run the script and capture ALL output
+          # tee will write to both console and file
+          # unbuffer ensures real-time output
+          python -u backendrunner.py 2>&1 | tee "script_output_${TIMESTAMP}.log"
+          
+          # Save exit code
+          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+
+      - name: Upload output log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: script-logs
+          path: "script_output_*.log"
+          retention-days: 7
