@@ -69,9 +69,9 @@ class ChessBrain:
                         threading.Thread(target=self._delayed_game_over).start()
                         return ""
 
-                    ai_move = self._get_best_move()
-                    print(f"🎯 AI response: {ai_move}")
-                    return ai_move if ai_move else ""
+                    # ---- Minimal change here: don't return AI move in /move endpoint
+                    self._get_best_move()  # AI move calculate ho jaaye lekin return na ho
+                    return ""
                 else:
                     return "Invalid"
             except:
@@ -114,9 +114,9 @@ class ChessBrain:
             threading.Thread(target=self._delayed_game_over).start()
             return ""
 
-        ai_move = self._get_best_move()
-        print(f"🎯 AI response: {ai_move}")
-        return ai_move if ai_move else ""
+        # ---- Minimal change here too
+        self._get_best_move()  # AI move calculate ho jaaye lekin return na ho
+        return ""
 
     # ====================== HELPERS ======================
 
@@ -292,4 +292,4 @@ print("♟  POST /move    (body: 'e2e4' or 'white:a1,a2 black:a7,a8' or 'white:a
 print("🔁  GET/POST /getmove   (returns last AI move stored)")
 print("=" * 60)
 
-app.run(host="0.0.0.0", port=port) 
+app.run(host="0.0.0.0", port=port)
