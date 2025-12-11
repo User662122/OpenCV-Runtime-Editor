@@ -4,6 +4,7 @@ from stockfish import Stockfish
 import os
 import time
 import threading
+from pyngrok import ngrok
 
 app = Flask(__name__)
 
@@ -281,13 +282,16 @@ def givemove():
     print(f"/givemove returning: '{move}'")
     return move, 200, {'Content-Type': 'text/plain'}
 
-if __name__ == '__main__':
-    port = 5001
-    print("BACKEND LIVE!")
-    print(f"Running on port: {port}")
-    print("POST /start   (body: 'white' or 'black')")
-    print("POST /move    (body: 'e2e4' or 'white:a1,a2;black:a7,a8')")
-    print("GET  /givemove (returns pending AI move)")
-    print("=" * 60)
-    
-    app.run(host="0.0.0.0", port=port)
+# Ngrok setup
+ngrok.set_auth_token("31TWswIKgSWHAfejOFT6s8mcW69_4UCxySRXzy6Si8mDHn9zn")
+port = 5001
+public_url = ngrok.connect(port)
+
+print("✅ BACKEND LIVE!")
+print("🌍 Public URL:", public_url)
+print("🕹  POST /start   (body: 'white' or 'black')")
+print("♟  POST /move    (body: 'e2e4' or 'white:a1,a2;black:a7,a8')")
+print("🔍 GET  /givemove (returns pending AI move)")
+print("=" * 60)
+
+app.run(host="0.0.0.0", port=port)
