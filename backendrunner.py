@@ -45,7 +45,7 @@ class ChessBrain:
 
         if self.app_color == chess.WHITE:
             move = self._get_best_move()
-            return move if move else "Game Over"
+            return ""  # <-- CHANGED (AI move ab /getmove se milega)
         else:
             return ""
 
