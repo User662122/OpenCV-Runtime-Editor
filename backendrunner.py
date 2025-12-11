@@ -292,4 +292,4 @@ print("♟  POST /move    (body: 'e2e4' or 'white:a1,a2 black:a7,a8' or 'white:a
 print("🔁  GET/POST /getmove   (returns last AI move stored)")
 print("=" * 60)
 
-app.run(host="0.0.0.0", port=port)
+app.run(host="0.0.0.0", port=port) 
