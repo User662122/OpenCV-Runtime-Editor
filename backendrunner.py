@@ -2,9 +2,9 @@ from flask import Flask, request
 import chess
 from stockfish import Stockfish
 import os
+from pyngrok import ngrok
 import time
 import threading
-from pyngrok import ngrok
 
 app = Flask(__name__)
 
@@ -15,7 +15,7 @@ class ChessBrain:
         self.game_active = False
         self.last_position_snapshot = None
         self.first_move_received = False
-        self.pending_ai_move = ""
+        self.last_ai_move = None  # <-- added to store last AI move
 
         self.ai = Stockfish(path=self._find_stockfish(), depth=20, parameters={
             "Threads": 4,
@@ -37,39 +37,32 @@ class ChessBrain:
         if color not in ['white', 'black']:
             return "Invalid"
 
-        # app_color = color that user/app is playing
-        # If user plays white, AI plays black (user moves first)
-        # If user plays black, AI plays white (AI moves first)
         self.app_color = chess.WHITE if color == 'white' else chess.BLACK
         self.board.reset()
         self.game_active = True
         self.first_move_received = False
         self.last_position_snapshot = self._get_piece_snapshot()
-        self.pending_ai_move = ""
 
-        # If user plays BLACK, AI plays WHITE and should move first
-        if self.app_color == chess.BLACK:
+        if self.app_color == chess.WHITE:
             move = self._get_best_move()
-            if move:
-                self.pending_ai_move = move
             return move if move else "Game Over"
         else:
-            # User plays WHITE, they move first
             return ""
 
     def process_move(self, incoming):
-        print(f"Incoming: {incoming}")
+        print(f"📥 Incoming: {incoming}")
 
         if not self.game_active:
             return "Game Over"
 
+        # ===== ALWAYS CHECK IF IT'S A UCI MOVE FIRST =====
         if self._is_uci_move(incoming):
             try:
                 move = chess.Move.from_uci(incoming.strip().lower())
                 if move in self.board.legal_moves:
                     self.board.push(move)
                     self.last_position_snapshot = self._get_piece_snapshot()
-                    print(f"Move detected: {move.uci()}")
+                    print(f"✅ Move detected: {move.uci()}")
 
                     if self.board.is_checkmate():
                         self.game_active = False
@@ -77,32 +70,34 @@ class ChessBrain:
                         return ""
 
                     ai_move = self._get_best_move()
-                    print(f"AI response: {ai_move}")
-                    if ai_move:
-                        self.pending_ai_move = ai_move
+                    print(f"🎯 AI response: {ai_move}")
                     return ai_move if ai_move else ""
                 else:
                     return "Invalid"
             except:
                 return "Invalid"
 
+        # ===== POSITION FORMAT PROCESSING =====
         positions = self._parse_positions(incoming)
         if positions is None:
             return ""
 
         current_board_snapshot = self._get_piece_snapshot()
 
+        # Compare if same as current board
         if positions == current_board_snapshot:
             return ""
 
+        # Compare drastic change against CURRENT BOARD
         if self._is_drastic_change(positions, current_board_snapshot):
             return ""
 
+        # Convert position snapshot into a best guess move
         move = self._deduce_move_from_snapshot(positions, current_board_snapshot)
         if not move:
             return ""
 
-        print(f"Move detected: {move}")
+        print(f"✅ Move detected: {move}")
 
         try:
             move_obj = chess.Move.from_uci(move)
@@ -120,16 +115,10 @@ class ChessBrain:
             return ""
 
         ai_move = self._get_best_move()
-        print(f"AI response: {ai_move}")
-        if ai_move:
-            self.pending_ai_move = ai_move
+        print(f"🎯 AI response: {ai_move}")
         return ai_move if ai_move else ""
 
-    def get_pending_move(self):
-        move = self.pending_ai_move
-        if move:
-            self.pending_ai_move = ""
-        return move
+    # ====================== HELPERS ======================
 
     def _is_uci_move(self, text):
         text = text.strip().lower()
@@ -141,7 +130,7 @@ class ChessBrain:
 
     def _delayed_game_over(self):
         time.sleep(8)
-        print("Game Over")
+        print("⚠️ Game Over")
 
     def _get_best_move(self):
         self.ai.set_fen_position(self.board.fen())
@@ -149,12 +138,17 @@ class ChessBrain:
         if best_move:
             move = chess.Move.from_uci(best_move)
             if move in self.board.legal_moves:
+                self.last_ai_move = best_move  # <-- store the AI move here
                 self.board.push(move)
                 if self.board.is_checkmate():
                     self.game_active = False
                     threading.Thread(target=self._delayed_game_over).start()
                 return best_move
         return None
+
+    def get_last_ai_move(self):
+        # return last stored AI move (or empty string if none)
+        return self.last_ai_move if self.last_ai_move else ""
 
     def _parse_positions(self, txt):
         try:
@@ -223,6 +217,8 @@ class ChessBrain:
 
         return diff > 2
 
+    # ====================== UPDATED FUNCTION WITH CASTLING ======================
+
     def _deduce_move_from_snapshot(self, new_pos, current_pos):
         current_white = set(current_pos["white"])
         current_black = set(current_pos["black"])
@@ -234,6 +230,7 @@ class ChessBrain:
         black_removed = current_black - new_black
         black_added = new_black - current_black
 
+        # ---- CASTLING DETECTION ----
         if white_removed == {"e1", "h1"} and white_added == {"g1", "f1"}:
             return "e1g1"
         if white_removed == {"e1", "a1"} and white_added == {"c1", "d1"}:
@@ -243,12 +240,14 @@ class ChessBrain:
         if black_removed == {"e8", "a8"} and black_added == {"c8", "d8"}:
             return "e8c8"
 
+        # ---- NORMAL MOVE ----
         if len(white_removed) == 1 and len(white_added) == 1 and not black_removed and not black_added:
             return list(white_removed)[0] + list(white_added)[0]
 
         if len(black_removed) == 1 and len(black_added) == 1 and not white_removed and not white_added:
             return list(black_removed)[0] + list(black_added)[0]
 
+        # ---- CAPTURE ----
         if len(white_removed) == 1 and len(white_added) == 1 and len(black_removed) == 1 and not black_added:
             if list(white_added)[0] in black_removed:
                 return list(white_removed)[0] + list(white_added)[0]
@@ -265,33 +264,32 @@ brain = ChessBrain()
 @app.route('/start', methods=['POST'])
 def start():
     color = request.get_data(as_text=True).strip()
-    print(f"/start called with color: {color}")
+    print(f"🎨 /start called with color: {color}")
     result = brain.start_game(color)
-    print(f"AI First Move: {result}")
+    print(f"🤖 AI First Move Output: {result}")
     return result, 200, {'Content-Type': 'text/plain'}
 
 @app.route('/move', methods=['POST'])
 def move():
     msg = request.get_data(as_text=True).strip()
-    brain.process_move(msg)
-    return "", 200, {'Content-Type': 'text/plain'}
+    result = brain.process_move(msg)
+    return result, 200, {'Content-Type': 'text/plain'}
 
-@app.route('/givemove', methods=['GET'])
-def givemove():
-    move = brain.get_pending_move()
-    print(f"/givemove returning: '{move}'")
-    return move, 200, {'Content-Type': 'text/plain'}
+# <-- NEW endpoint to return stored AI move when requested
+@app.route('/getmove', methods=['GET', 'POST'])
+def getmove():
+    result = brain.get_last_ai_move()
+    return result, 200, {'Content-Type': 'text/plain'}
 
-# Ngrok setup
 ngrok.set_auth_token("31TWswIKgSWHAfejOFT6s8mcW69_4UCxySRXzy6Si8mDHn9zn")
-port = 5001
+port = 5000
 public_url = ngrok.connect(port)
 
 print("✅ BACKEND LIVE!")
 print("🌍 Public URL:", public_url)
 print("🕹  POST /start   (body: 'white' or 'black')")
-print("♟  POST /move    (body: 'e2e4' or 'white:a1,a2;black:a7,a8')")
-print("🔍 GET  /givemove (returns pending AI move)")
+print("♟  POST /move    (body: 'e2e4' or 'white:a1,a2 black:a7,a8' or 'white:a1,a2;black:a7,a8')")
+print("🔁  GET/POST /getmove   (returns last AI move stored)")
 print("=" * 60)
 
 app.run(host="0.0.0.0", port=port)
