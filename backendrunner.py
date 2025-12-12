@@ -146,9 +146,14 @@ class ChessBrain:
                 return best_move
         return None
 
+    # ============ MINIMAL CHANGE ============
     def get_last_ai_move(self):
-        # return last stored AI move (or empty string if none)
-        return self.last_ai_move if self.last_ai_move else ""
+        # return last stored AI move once, then clear it
+        if self.last_ai_move:
+            move_to_return = self.last_ai_move
+            self.last_ai_move = None  # clear after returning
+            return move_to_return
+        return ""
 
     def _parse_positions(self, txt):
         try:
