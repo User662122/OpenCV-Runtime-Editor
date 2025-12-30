@@ -69,11 +69,19 @@ model = XGBClassifier(
 model.fit(X_scaled, y)
 
 # ===============================
-# LIVE INPUT (TODAY OPEN PRICE)
+# LIVE INPUT (TRUE DAY START OPEN)
 # ===============================
-today_data = yf.download("BTC-USD", period="1d", interval="1d", auto_adjust=False, progress=False)
-today_data.columns = today_data.columns.get_level_values(0)
-live_open_price = float(today_data["Open"].iloc[-1])
+today_1m = yf.download(
+    "BTC-USD",
+    period="1d",
+    interval="1m",
+    progress=False
+)
+
+today_1m.columns = today_1m.columns.get_level_values(0)
+
+# ✅ TRUE DAY OPEN (FIRST MINUTE)
+live_open_price = float(today_1m["Open"].iloc[0])
 
 # ===============================
 # LIVE FEATURE CREATION
@@ -104,6 +112,6 @@ direction = "UP (LONG)" if prediction == 1 else "DOWN (SHORT)"
 confidence = round(np.max(proba) * 100, 2)
 
 print("\n===== LIVE NEXT DAY PREDICTION =====")
-print(f"Today's Open Price: ${live_open_price:,.2f}")
+print(f"Today's TRUE Day-Start Open Price: ${live_open_price:,.2f}")
 print(f"Tomorrow Direction: {direction}")
 print(f"Confidence: {confidence}%")
