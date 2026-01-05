@@ -1,3 +1,22 @@
+import time
+from datetime import datetime, timezone, timedelta
+
+# -----------------------------
+# WAIT UNTIL 00:00:04 UTC
+# -----------------------------
+now = datetime.now(timezone.utc)
+
+# Next 00:00:04 UTC
+target_time = datetime(now.year, now.month, now.day, 3, 43, 7, tzinfo=timezone.utc)
+if now >= target_time:
+    # Agar abhi 00:00:04 UTC nikal chuka hai, next day ka wait
+    target_time += timedelta(days=1)
+
+seconds_to_wait = (target_time - now).total_seconds()
+print(f"⏳ Waiting {seconds_to_wait:.2f} seconds until 00:00:04 UTC...")
+time.sleep(seconds_to_wait)
+
+print("🎯 It's 00:00:04 UTC! Script starting...\n")
 import requests
 import pandas as pd
 import numpy as np
