@@ -5,7 +5,7 @@ from xgboost import XGBClassifier
 from sklearn.preprocessing import StandardScaler
 
 #===============================
-# DATA DOWNLOAD (BINANCE VISION) - LAST ~1000 DAYS FOR TRAINING
+# DATA DOWNLOAD (BINANCE VISION) - LAST ~1000 DAYS
 #===============================
 
 def fetch_binance_data(symbol="BTCUSDT", interval="1d", limit=1000):
@@ -74,11 +74,13 @@ features = [
 target = "Target"
 
 #===============================
-# TRAIN MODEL ON ALL AVAILABLE HISTORICAL DATA
+# TRAIN MODEL ON LAST 2 MONTHS (~60 DAYS)
 #===============================
 
-# Use all data except the very last row (because Target for last row is NaN)
-train_df = df.iloc[:-1]  # All rows with valid Target
+training_days = 60  # last 2 months
+
+train_start = max(0, len(df) - 1 - training_days)
+train_df = df.iloc[train_start:-1]  # Last 60 days for training
 
 X_train = train_df[features]
 y_train = train_df[target]
@@ -122,4 +124,4 @@ print(f"Today's Open Price: ${today_open}")
 print(f"Model Prediction: {direction}")
 print(f"Confidence: {round(confidence_pct, 2)}%")
 print("\nNote: This predicts if today's close > today's open (UP) or not (DOWN).")
-print("Model trained on previous days' data, same logic as your backtest.")
+print("Model trained on previous 60 days' data, same logic as your backtest.")
