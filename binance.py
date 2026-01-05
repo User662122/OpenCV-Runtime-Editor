@@ -1,22 +1,47 @@
 import time
 from datetime import datetime, timezone, timedelta
+import requests
+
+TARGET_SECOND = 3  # 00:00:04 UTC
 
 # -----------------------------
-# WAIT UNTIL 00:00:04 UTC
+# FETCH BINANCE SERVER TIME
 # -----------------------------
-now = datetime.now(timezone.utc)
+try:
+    r = requests.get("https://fapi.binance.com/fapi/v1/time", timeout=5)
+    r.raise_for_status()
+    server_time_ms = r.json()['serverTime']
+except Exception as e:
+    raise Exception(f"Error fetching Binance time: {e}")
+
+# Convert to datetime UTC
+server_time = datetime.fromtimestamp(server_time_ms / 1000, tz=timezone.utc)
 
 # Next 00:00:04 UTC
-target_time = datetime(now.year, now.month, now.day, 3, 45, 0, tzinfo=timezone.utc)
-if now >= target_time:
-    # Agar abhi 00:00:04 UTC nikal chuka hai, next day ka wait
+target_time = datetime(
+    server_time.year, server_time.month, server_time.day,
+    3, 56, TARGET_SECOND, tzinfo=timezone.utc
+)
+if server_time >= target_time:
+    # If already past, move to next day
     target_time += timedelta(days=1)
 
-seconds_to_wait = (target_time - now).total_seconds()
+# Calculate remaining seconds
+seconds_to_wait = (target_time - server_time).total_seconds()
+
+print(f"⏳ Binance UTC now: {server_time.strftime('%H:%M:%S')}")
 print(f"⏳ Waiting {seconds_to_wait:.2f} seconds until 00:00:04 UTC...")
+
+# Single sleep until target
 time.sleep(seconds_to_wait)
 
-print("🎯 It's 00:00:04 UTC! Script starting...\n")
+print(f"🎯 It's {TARGET_SECOND} sec past 00:00 UTC on Binance! Script starting...\n")
+
+# -----------------------------
+# YOUR SCRIPT STARTS HERE
+# -----------------------------
+# yahan aapka prediction / trading code rakh sakte ho
+print("🚀 Script execution started!")
 import requests
 import pandas as pd
 import numpy as np
