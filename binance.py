@@ -1,20 +1,3 @@
-import time
-from datetime import datetime, timedelta
-
-# -------------------------
-# WAIT UNTIL 00:00:02 UTC
-# -------------------------
-now = datetime.utcnow()
-# next midnight
-next_midnight = datetime.combine(now.date(), datetime.min.time())
-if now >= next_midnight + timedelta(seconds=2):
-    # if already past 00:00:02 today, schedule for next day
-    next_midnight += timedelta(days=1)
-target_time = next_midnight + timedelta(seconds=2)
-wait_seconds = (target_time - now).total_seconds()
-print(f"⏳ Waiting {wait_seconds:.2f} seconds until 00:00:02 UTC to start...")
-time.sleep(wait_seconds)
-print("🚀 Starting script at 00:00:02 UTC")
 import requests
 import pandas as pd
 import numpy as np
