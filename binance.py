@@ -142,3 +142,48 @@ print(f"Model Prediction: {direction}")
 print(f"Confidence: {round(confidence_pct, 2)}%")
 print("\nNote: This predicts if today's close > today's open (UP) or not (DOWN).")
 print("Model trained on previous 60 days' data, same logic as your backtest.")
+import os
+import requests
+import json
+
+# ✅ Read token from GitHub Secret
+GITHUB_TOKEN = os.getenv("TOKEN")  # ← ye secret ka naam
+GIST_ID = "2ff04b67caecd1fb5d71ccca35fc1928"
+GITHUB_USERNAME = "User662122"
+
+# Model result (already calculated in your script)
+result = {
+    "date": today_date,
+    "open_price": today_open,
+    "prediction": direction,
+    "confidence_percent": round(confidence_pct, 2)
+}
+
+# Payload to update the gist
+payload = {
+    "files": {
+        "btc_prediction.json": {
+            "content": json.dumps(result, indent=2)
+        }
+    }
+}
+
+# PATCH request to overwrite the existing gist
+response = requests.patch(
+    f"https://api.github.com/gists/{GIST_ID}",
+    headers={
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    },
+    json=payload
+)
+
+if response.status_code == 200:
+    print("\n✅ GIST UPDATED SUCCESSFULLY")
+    print("🌍 FIXED URL (never changes):")
+    print(f"https://gist.github.com/{GIST_ID}")
+    print("📄 RAW JSON URL:")
+    print(f"https://gist.githubusercontent.com/{GITHUB_USERNAME}/{GIST_ID}/raw/btc_prediction.json")
+else:
+    print("❌ GIST UPDATE FAILED")
+    print(response.text)
