@@ -1,8 +1,10 @@
 name: BTC Prediction Bot
 
 on:
-  workflow_dispatch:   # Manual run (GitHub UI)
-  repository_dispatch: # API / webhook se trigger
+  workflow_dispatch:          # Manual run (GitHub UI)
+  repository_dispatch:        # API / webhook se trigger
+  # Optional: schedule: 
+  #   - cron: '30 4 * * *'   # har din subah ~10 AM IST
 
 jobs:
   run-bot:
@@ -17,14 +19,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ===============================
-      # 🔥 PIP CACHE (ADD ONLY THIS)
-      # ===============================
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: \( {{ runner.os }}-pip- \){{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -34,5 +33,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run BTC prediction
-        run: |
-          python binance.py
+        env:                          # ← YE LINE ADD KARNI HAI
+          TOKEN: ${{ secrets.TOKEN }} # ← aur yeh secret reference
+        run: python binance.py        # ← tumhara script
