@@ -143,7 +143,7 @@ result = {
     "date": today_date,
     "open_price": today_open,
     "prediction": direction,
-    "confidence_percent": round(confidence_pct, 2)
+    "confidence_percent": float(round(confidence_pct, 2))
 }
 
 # Payload to update the gist
