@@ -1,14 +1,12 @@
 name: BTC Prediction Bot
 
 on:
-  workflow_dispatch:          # Manual run (GitHub UI)
-  repository_dispatch:        # API / webhook se trigger
-  # Optional: schedule: 
-  #   - cron: '30 4 * * *'   # har din subah ~10 AM IST
+  workflow_dispatch:          # Sirf manual run (GitHub UI se button dabake)
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 1        # ← YEH LINE ADD KI → 1 minute baad auto cancel
 
     steps:
       - name: Checkout repository
@@ -33,6 +31,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run BTC prediction
-        env:                          # ← YE LINE ADD KARNI HAI
-          TOKEN: ${{ secrets.TOKEN }} # ← aur yeh secret reference
-        run: python binance.py        # ← tumhara script
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: python binance.py
