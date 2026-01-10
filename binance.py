@@ -147,7 +147,7 @@ import requests
 import json
 
 # ✅ Read token from GitHub Secret
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # ← ye secret ka naam
+GITHUB_TOKEN = os.getenv("TOKEN")  # ← ye secret ka naam
 GIST_ID = "2ff04b67caecd1fb5d71ccca35fc1928"
 GITHUB_USERNAME = "User662122"
 
