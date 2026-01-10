@@ -32,5 +32,5 @@ jobs:
 
       - name: Run BTC prediction
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.TOKEN }}
         run: python binance.py
