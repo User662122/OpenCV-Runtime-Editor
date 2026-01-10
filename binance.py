@@ -162,7 +162,7 @@ result = {
 # Payload to update the gist
 payload = {
     "files": {
-        "btc_prediction.json": {
+        "Prediction": {
             "content": json.dumps(result, indent=2)
         }
     }
