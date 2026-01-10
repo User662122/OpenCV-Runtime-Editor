@@ -124,7 +124,7 @@ today_open = round(today_row["Open"], 2)
 
 print("\n===== LIVE PREDICTION FOR TODAY =====\n")
 print(f"Date: {today_date}")
-print(f"Today's Open Price: ${today_open}")
+print(f"Today's Open Price: {today_open}")
 print(f"Model Prediction: {direction}")
 print(f"Confidence: {round(confidence_pct, 2)}%")
 print("\nNote: This predicts if today's close > today's open (UP) or not (DOWN).")
